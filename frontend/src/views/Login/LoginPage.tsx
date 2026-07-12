@@ -8,7 +8,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { setRole } = useRole();
 
-  const [email, setEmail] = useState('Raven.k@transitops.in');
+  const [email, setEmail] = useState('Raven.k@shifthappens.in');
   const [password, setPassword] = useState('password');
   const [selectedRole, setSelectedRole] = useState<Role>('Dispatcher');
   const [error, setError] = useState('');
@@ -23,7 +23,7 @@ export function LoginPage() {
     }
 
     // Validation condition
-    if (email === 'Raven.k@transitops.in' && password === 'password') {
+    if (email === 'Raven.k@shifthappens.in' && password === 'password') {
       setRole(selectedRole);
       localStorage.setItem('simulated_role', selectedRole);
       localStorage.setItem('token', 'mock_jwt_token_12345');
@@ -62,7 +62,7 @@ export function LoginPage() {
               <Truck className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-wide">TransitOps</h2>
+              <h2 className="text-lg font-bold text-white tracking-wide">Shift Happens</h2>
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Fleet Management</p>
             </div>
           </div>
@@ -95,7 +95,7 @@ export function LoginPage() {
           </div>
 
           <div className="text-[10px] text-slate-500 font-medium relative z-10 uppercase tracking-widest">
-            TRANSITOPS © 2026
+            SHIFT HAPPENS © 2026
           </div>
         </div>
 
@@ -128,7 +128,7 @@ export function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@transitops.in"
+                  placeholder="email@shifthappens.in"
                   className="w-full bg-white/[0.02] hover:bg-white/[0.04] text-white border border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 font-medium transition-all"
                 />
               </div>

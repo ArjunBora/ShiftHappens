@@ -50,7 +50,7 @@ export function Sidebar() {
           <Truck className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-base font-bold text-white tracking-wide drop-shadow-md">TransitOps</h1>
+          <h1 className="text-base font-bold text-white tracking-wide drop-shadow-md">Shift Happens</h1>
           <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Fleet Core</p>
         </div>
       </div>
