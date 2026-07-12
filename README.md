@@ -24,6 +24,13 @@ The project provides live telemetry tracking, vehicle status monitoring, driver 
 
 ---
 
+## Demo Video
+
+A walkthrough demonstration of the system is available on YouTube:
+[Shift Happens Demo Video](https://youtu.be/4wuzFHLQLuI)
+
+---
+
 ## Technical Stack
 
 ### Backend Service
@@ -67,7 +74,6 @@ Start the Express server on its default port (3000):
 # Run backend development server
 npm start
 ```
-The API server will listen at `http://localhost:3000`.
 
 ### Step 3: Run the Frontend Client
 Open a second terminal instance, navigate to the frontend directory, install dependencies, and launch the Vite client:
@@ -81,7 +87,6 @@ npm install
 # Launch local development server
 npm run dev
 ```
-The web interface will be accessible at `http://localhost:5174`.
 
 ---
 
