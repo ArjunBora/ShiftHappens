@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { 
   LayoutDashboard, 
   Truck, 
@@ -9,7 +10,8 @@ import {
   Fuel, 
   BarChart3, 
   Settings,
-  Shield
+  Shield,
+  ChevronUp
 } from 'lucide-react';
 import { useRole } from '../../context/AuthContext';
 import type { Role } from '../../context/AuthContext';
@@ -25,13 +27,16 @@ const NAV_ITEMS = [
   { label: 'Settings', path: '/settings', icon: Settings, roles: ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'] },
 ];
 
+const ROLES: Role[] = ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'];
+
 export function Sidebar() {
   const { role, setRole } = useRole();
+  const [isRbacOpen, setIsRbacOpen] = useState(false);
 
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newRole = e.target.value as Role;
+  const handleRoleChange = (newRole: Role) => {
     setRole(newRole);
     localStorage.setItem('simulated_role', newRole);
+    setIsRbacOpen(false);
   };
 
   // Filter nav items based on permissions matrix
@@ -73,23 +78,71 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Simulated Role Switcher Panel */}
-      <div className="p-4 border-t border-white/5 bg-black/20">
-        <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          <Shield className="h-3 w-3 text-[#F59E0B]" />
-          <span>RBAC Simulator</span>
-        </div>
-        <select
-          value={role}
-          onChange={handleRoleChange}
-          className="w-full bg-white/5 text-white text-xs border border-white/10 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-white/20 font-medium appearance-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+      {/* Collapsible RBAC Simulator */}
+      <div className="p-4 border-t border-white/5">
+        {/* Toggle Header */}
+        <button
+          onClick={() => setIsRbacOpen(v => !v)}
+          className="w-full flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0 hover:text-slate-200 transition-colors duration-200 cursor-pointer group"
         >
-          <option value="Fleet Manager" className="bg-[#151821]">Fleet Manager</option>
-          <option value="Dispatcher" className="bg-[#151821]">Dispatcher</option>
-          <option value="Safety Officer" className="bg-[#151821]">Safety Officer</option>
-          <option value="Financial Analyst" className="bg-[#151821]">Financial Analyst</option>
-        </select>
+          <span className="flex items-center gap-2">
+            <Shield className="h-3 w-3 text-[#F59E0B]" />
+            RBAC Simulator
+          </span>
+          <motion.div
+            animate={{ rotate: isRbacOpen ? 0 : 180 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          >
+            <ChevronUp className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </motion.div>
+        </button>
+
+        {/* Active role pill — always visible */}
+        <AnimatePresence>
+          {!isRbacOpen && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className="text-[11px] text-slate-500 mt-1.5 pl-5 truncate"
+            >
+              {role}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        {/* Expandable role list */}
+        <AnimatePresence>
+          {isRbacOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 space-y-1">
+                {ROLES.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => handleRoleChange(r)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 active:scale-[0.98] ${
+                      role === r
+                        ? 'glass-panel text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </aside>
   );
 }
+
+
