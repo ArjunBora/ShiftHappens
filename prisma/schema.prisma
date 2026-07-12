@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Vehicle {
+  regNumber        String            @id @map("reg_number")
+  model            String
+  type             String
+  maxLoadCapacity  Float             @map("max_load_capacity")
+  odometer         Float             @default(0)
+  acquisitionCost  Float             @map("acquisition_cost")
+  status           String            @default("Available")
+  trips            Trip[]
+  maintenanceLogs  MaintenanceLog[]
+  fuelLogs         FuelLog[]
+  expenses         Expense[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id                Int      @id @default(autoincrement())
+  name              String
+  licenseNumber     String   @unique @map("license_number")
+  licenseCategory   String   @map("license_category")
+  licenseExpiry     DateTime @map("license_expiry")
+  contactNumber     String   @map("contact_number")
+  tripCompletionRate Float   @default(100.0) @map("trip_completion_rate")
+  status            String   @default("Available")
+  trips             Trip[]
+
+  @@map("drivers")
+}
+
+model Trip {
+  id               Int       @id @default(autoincrement())
+  source           String
+  destination      String
+  cargoWeight      Float     @map("cargo_weight")
+  plannedDistance  Float     @map("planned_distance")
+  actualDistance   Float?    @map("actual_distance")
+  status           String    @default("Draft")
+  vehicleReg       String    @map("vehicle_reg")
+  driverId         Int       @map("driver_id")
+  vehicle          Vehicle   @relation(fields: [vehicleReg], references: [regNumber])
+  driver           Driver    @relation(fields: [driverId], references: [id])
+  expenses         Expense[]
+
+  @@map("trips")
+}
+
+model MaintenanceLog {
+  id          Int      @id @default(autoincrement())
+  description String
+  cost        Float
+  date        DateTime @default(now())
+  status      String   @default("Active")
+  vehicleReg  String   @map("vehicle_reg")
+  vehicle     Vehicle  @relation(fields: [vehicleReg], references: [regNumber])
+
+  @@map("maintenance_logs")
+}
+
+model FuelLog {
+  id         Int      @id @default(autoincrement())
+  liters     Float
+  cost       Float
+  date       DateTime @default(now())
+  vehicleReg String   @map("vehicle_reg")
+  vehicle    Vehicle  @relation(fields: [vehicleReg], references: [regNumber])
+
+  @@map("fuel_logs")
+}
+
+model Expense {
+  id         Int      @id @default(autoincrement())
+  tollCost   Float    @map("toll_cost")
+  otherCost  Float    @map("other_cost")
+  vehicleReg String   @map("vehicle_reg")
+  tripId     Int?     @map("trip_id")
+  vehicle    Vehicle  @relation(fields: [vehicleReg], references: [regNumber])
+  trip       Trip?    @relation(fields: [tripId], references: [id])
+
+  @@map("expenses")
+}
