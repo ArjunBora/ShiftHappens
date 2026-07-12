@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  /* Backgrounds */
+  --bg-base: #0f1117;   /* Main page background — deep navy-black */
+  --bg-surface: #1a1d27;   /* Cards, sidebar — slightly lighter */
+  --bg-elevated: #232635;   /* Modals, dropdowns — clearly elevated */
+
+  /* Borders */
+  --border-subtle: #2e3148;   /* Table rows, card borders */
+  --border-strong: #4b5280;   /* Focused inputs, active borders */
+
+  /* Accent — ONE accent color only */
+  --accent: #f59e0b;   /* Amber 500 — primary buttons, active nav items */
+  --accent-hover: #d97706;   /* Amber 600 — button hover state */
+
+  /* Text */
+  --text-primary: #f1f5f9;   /* Main readable text */
+  --text-secondary: #94a3b8;   /* Labels, metadata, placeholders */
+  --text-disabled: #475569;   /* Disabled states */
+
+  /* Status — use these ONLY for status badges, nowhere else */
+  --status-green: #10b981;   /* Available, Completed */
+  --status-blue: #3b82f6;   /* On Trip, Dispatched */
+  --status-orange: #f59e0b;   /* In Shop, Active (Maintenance) */
+  --status-red: #ef4444;   /* Suspended, Cancelled, Retired, Expired */
+  --status-gray: #6b7280;   /* Off Duty, Draft */
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
