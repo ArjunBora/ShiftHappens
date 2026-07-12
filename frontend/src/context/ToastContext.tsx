@@ -40,6 +40,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  React.useEffect(() => {
+    const handleForbidden = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      showToast(customEvent.detail || 'Access Denied: Action forbidden for your current role.', 'error');
+    };
+    window.addEventListener('api-forbidden-error', handleForbidden);
+    return () => {
+      window.removeEventListener('api-forbidden-error', handleForbidden);
+    };
+  }, [showToast]);
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}

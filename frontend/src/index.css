@@ -1,82 +1,197 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
   /* Backgrounds */
-  --bg-base: #0f1117;   /* Main page background — deep navy-black */
-  --bg-surface: #1a1d27;   /* Cards, sidebar — slightly lighter */
-  --bg-elevated: #232635;   /* Modals, dropdowns — clearly elevated */
+  --bg-base: #08090d;      /* Ultra deep cosmic space dark */
+  --bg-surface: rgba(16, 18, 28, 0.4);   /* Translucent surface base */
+  --bg-elevated: rgba(26, 29, 46, 0.7);   /* High frosted card surface */
 
   /* Borders */
-  --border-subtle: #2e3148;   /* Table rows, card borders */
-  --border-strong: #4b5280;   /* Focused inputs, active borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);   /* Extremely fine translucent borders */
+  --border-strong: rgba(255, 255, 255, 0.15);   /* Prominent elements or active states */
 
-  /* Accent — ONE accent color only */
-  --accent: #f59e0b;   /* Amber 500 — primary buttons, active nav items */
-  --accent-hover: #d97706;   /* Amber 600 — button hover state */
+  /* Accent */
+  --accent: #7b39fc;       /* Primary Purple */
+  --accent-hover: #6c2ee0; /* Hover Accent */
+  --accent-glow: rgba(123, 57, 252, 0.25);
 
   /* Text */
-  --text-primary: #f1f5f9;   /* Main readable text */
-  --text-secondary: #94a3b8;   /* Labels, metadata, placeholders */
-  --text-disabled: #475569;   /* Disabled states */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-disabled: #475569;
 
-  /* Status — use these ONLY for status badges, nowhere else */
-  --status-green: #10b981;   /* Available, Completed */
-  --status-blue: #3b82f6;   /* On Trip, Dispatched */
-  --status-orange: #f59e0b;   /* In Shop, Active (Maintenance) */
-  --status-red: #ef4444;   /* Suspended, Cancelled, Retired, Expired */
-  --status-gray: #6b7280;   /* Off Duty, Draft */
+  /* Status Badges */
+  --status-green: #10b981;
+  --status-blue: #3b82f6;
+  --status-orange: #f59e0b;
+  --status-red: #ef4444;
+  --status-gray: #6b7280;
 }
 
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   margin: 0;
+  overflow-x: hidden;
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.05); /* Slightly darker than 0.25 to fit dark mode, but with the lighting effects */
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+/* Premium Glassmorphism Cards */
+.glass-card {
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
   box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 20px 10px rgba(255, 255, 255, 0.05); /* Reduced opacity on the massive inner glow so it isn't pure white */
+    0 10px 30px -10px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 15px 35px -5px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Active Highlight Panels */
+.glass-panel {
+  background: rgba(123, 57, 252, 0.06); /* Purple Tint */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(123, 57, 252, 0.2);
+  box-shadow: 
+    0 8px 32px rgba(123, 57, 252, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   position: relative;
   overflow: hidden;
 }
 
-/* We leave before/after for the edge highlights */
-.glass-panel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.8),
-    transparent
-  );
-  z-index: 10;
+/* Scrollbar customizations */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
-.glass-panel::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.8),
-    transparent,
-    rgba(255, 255, 255, 0.3)
-  );
-  z-index: 10;
+/* Custom animated gradient backgrounds */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.15;
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    opacity: 0.25;
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    opacity: 0.1;
+    transform: translate(-20px, 20px) scale(0.9);
+  }
 }
+
+.animate-pulse-glow-1 {
+  animation: pulse-glow 15s ease-in-out infinite;
+}
+
+.animate-pulse-glow-2 {
+  animation: pulse-glow 20s ease-in-out infinite alternate;
+}
+
+/* Global Tailwind Overrides for Glassmorphic Stakent Aesthetic */
+
+/* Custom Inputs & Selects inside views */
+input, select {
+  padding: 8px 14px;
+}
+
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+input:focus, select:focus {
+  border-color: rgba(123, 57, 252, 0.4) !important;
+  box-shadow: 0 0 10px rgba(123, 57, 252, 0.1) !important;
+  outline: none !important;
+}
+
+/* Override hardcoded card containers */
+.bg-\[\#1A1D27\], .bg-slate-100 {
+  background: rgba(16, 18, 28, 0.45) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    0 10px 30px -10px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Table header backgrounds */
+.bg-\[\#151821\] {
+  background: rgba(10, 11, 19, 0.5) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Border overrides */
+.border-\[\#2E3148\], .border-white\/5 {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Table rows divider */
+.divide-\[\#2E3148\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Table row hover overrides */
+.hover\:bg-\[\#232635\]:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Modal backgrounds */
+.bg-black\/60 {
+  background-color: rgba(6, 7, 10, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Button overrides - Purple to matches premium look */
+.bg-\[\#F59E0B\], .bg-gradient-to-r.from-amber-500 {
+  background: linear-gradient(135deg, #7b39fc 0%, #6c2ee0 100%) !important;
+  color: #fafafa !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 15px rgba(123, 57, 252, 0.15) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.bg-\[\#F59E0B\]:hover, .bg-gradient-to-r.from-amber-500:hover {
+  background: linear-gradient(135deg, #8a50ff 0%, #7b39fc 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(123, 57, 252, 0.2) !important;
+}
+
+.bg-\[\#F59E0B\]:active, .bg-gradient-to-r.from-amber-500:active {
+  transform: translateY(0) !important;
+}
+
+.hover\:bg-\[\#D97706\]:hover {
+  background: linear-gradient(135deg, #8a50ff 0%, #7b39fc 100%) !important;
+}
+

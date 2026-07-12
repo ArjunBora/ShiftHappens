@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, UserPlus, ShieldAlert } from 'lucide-react';
+import { Plus, Search, UserPlus, ShieldAlert, Download, Filter } from 'lucide-react';
 import { useRole } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { StatusBadge } from '../../components/shared/StatusBadge';
@@ -25,6 +25,7 @@ export function DriversPage() {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [complianceOnly, setComplianceOnly] = useState(false);
 
   // Modal states
   const [isOpen, setIsOpen] = useState(false);
@@ -61,26 +62,46 @@ export function DriversPage() {
     fetchDrivers();
   }, []);
 
-  // Check RBAC permissions: Fleet Manager & Safety Officer can edit
   const canAddDriver = role === 'Fleet Manager' || role === 'Safety Officer';
 
   const handleAddDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Unique License check
-    if (drivers.some(d => d.license_number.toLowerCase() === newLicenseNo.trim().toLowerCase())) {
-      setError(`License number ${newLicenseNo} is already registered.`);
+    // Validations:
+    if (!newName.trim()) {
+      setError('Driver name is required.');
+      return;
+    }
+
+    const cleanLicense = newLicenseNo.trim().toUpperCase();
+    if (!cleanLicense) {
+      setError('License number is required.');
+      return;
+    }
+    if (drivers.some(d => d.license_number.toLowerCase() === cleanLicense.toLowerCase())) {
+      setError(`License number ${cleanLicense} is already registered.`);
+      return;
+    }
+
+    if (!newExpiry) {
+      setError('License expiry date is required.');
+      return;
+    }
+
+    const cleanContact = newContact.trim();
+    if (!/^\d{10}$/.test(cleanContact)) {
+      setError('Contact number must be exactly 10 digits.');
       return;
     }
 
     try {
       const payload = {
         name: newName.trim(),
-        licenseNumber: newLicenseNo.trim().toUpperCase(),
+        licenseNumber: cleanLicense,
         licenseCategory: newCategory,
         licenseExpiry: new Date(newExpiry).toISOString(),
-        contactNumber: newContact.trim(),
+        contactNumber: cleanContact,
         tripCompletionRate: 100.0,
         status: 'Available'
       };
@@ -102,10 +123,21 @@ export function DriversPage() {
     }
   };
 
-  const handleStatusChange = (id: number, nextStatus: Driver['safety_status']) => {
-    // We will implement API call if backend supports it, or keep it local for now
-    if (!canAddDriver) return;
-    setDrivers(drivers.map(d => d.id === id ? { ...d, safety_status: nextStatus } : d));
+  const getExpiryDetails = (expiryDateString: string) => {
+    const expiry = new Date(expiryDateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return { expired: true, expiringSoon: false, daysLeft: 0, text: 'EXPIRED' };
+    } else if (diffDays <= 30) {
+      return { expired: false, expiringSoon: true, daysLeft: diffDays, text: `${diffDays}d left` };
+    }
+    return { expired: false, expiringSoon: false, daysLeft: diffDays, text: '' };
   };
 
   const filteredDrivers = drivers.filter(d => {
@@ -113,44 +145,80 @@ export function DriversPage() {
                           d.license_number.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = filterCategory === 'All' || d.license_category === filterCategory;
     const matchesStatus = filterStatus === 'All' || d.safety_status === filterStatus.toLowerCase().replace(' ', '_');
-    return matchesSearch && matchesCategory && matchesStatus;
+    
+    const expDetails = getExpiryDetails(d.license_expiry);
+    const isNonCompliant = expDetails.expired || expDetails.expiringSoon;
+    const matchesCompliance = !complianceOnly || isNonCompliant;
+    
+    return matchesSearch && matchesCategory && matchesStatus && matchesCompliance;
   });
 
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('en-GB', { month: '2-digit', year: 'numeric' });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const checkExpired = (dateString: string) => {
-    return new Date(dateString) < new Date();
+  const exportCSV = () => {
+    const headers = ['Driver Name', 'License No', 'Category', 'Expiry Date', 'Contact', 'Trip Completion Rate', 'Status'];
+    const rows = filteredDrivers.map(d => [
+      d.name,
+      d.license_number,
+      d.license_category,
+      new Date(d.license_expiry).toLocaleDateString('en-GB'),
+      d.contact_number,
+      `${d.trip_completion_rate}%`,
+      d.safety_status.toUpperCase().replace('_', ' ')
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `drivers_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Drivers exported to CSV successfully', 'success');
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-manrope">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Drivers</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white font-instrument">Drivers</h2>
           <p className="text-sm text-slate-400">Manage driver registrations, licenses, and scheduling statuses</p>
         </div>
 
-        {canAddDriver && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsOpen(true)}
-            className="bg-[#F59E0B] hover:bg-[#D97706] text-[#0F1117] font-bold text-sm px-4 py-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
+            onClick={exportCSV}
+            className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition-colors active:scale-[0.98]"
           >
-            <Plus className="h-4 w-4" />
-            Add Driver
+            <Download className="h-4 w-4" />
+            Export CSV
           </button>
-        )}
+
+          {canAddDriver && (
+            <button
+              onClick={() => setIsOpen(true)}
+              className="bg-[#7b39fc] hover:bg-[#6c2ee0] text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg shadow-[#7b39fc]/10 active:scale-[0.98] transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              Add Driver
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Toolbar filters */}
-      <div className="flex flex-wrap gap-4 bg-[#1A1D27] p-4 border border-[#2E3148] rounded-lg">
+      <div className="flex flex-wrap items-center gap-4 bg-slate-900/40 p-4 border border-white/5 rounded-2xl backdrop-blur-md">
         {/* Search */}
         <div className="relative w-72">
-          <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+          <span className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-slate-500" />
           </span>
           <input
@@ -158,21 +226,21 @@ export function DriversPage() {
             placeholder="Search name or license..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#0F1117] text-white placeholder-slate-500 text-xs border border-[#2E3148] rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-[#4B5280] font-medium"
+            className="w-full bg-white/[0.02] text-white placeholder-slate-500 text-xs border border-white/10 rounded-xl !pl-10 pr-4 py-2.5 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 font-medium transition-all"
           />
         </div>
 
         {/* Category Filter */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-semibold">License Category:</span>
+          <span className="text-xs text-slate-400 font-semibold">Category:</span>
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-[#0F1117] text-white text-xs border border-[#2E3148] rounded-lg p-2 focus:outline-none focus:border-[#4B5280] font-medium"
+            className="bg-white/[0.02] text-white text-xs border border-white/10 rounded-xl p-2.5 focus:outline-none focus:border-purple-500/50 font-medium cursor-pointer transition-all"
           >
-            <option value="All">All Categories</option>
-            <option value="LMV">LMV</option>
-            <option value="HMV">HMV</option>
+            <option value="All" className="bg-[#0b0c13]">All Categories</option>
+            <option value="LMV" className="bg-[#0b0c13]">LMV</option>
+            <option value="HMV" className="bg-[#0b0c13]">HMV</option>
           </select>
         </div>
 
@@ -182,22 +250,35 @@ export function DriversPage() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-[#0F1117] text-white text-xs border border-[#2E3148] rounded-lg p-2 focus:outline-none focus:border-[#4B5280] font-medium"
+            className="bg-white/[0.02] text-white text-xs border border-white/10 rounded-xl p-2.5 focus:outline-none focus:border-purple-500/50 font-medium cursor-pointer transition-all"
           >
-            <option value="All">All Statuses</option>
-            <option value="Available">Available</option>
-            <option value="On Trip">On Trip</option>
-            <option value="Off Duty">Off Duty</option>
-            <option value="Suspended">Suspended</option>
+            <option value="All" className="bg-[#0b0c13]">All Statuses</option>
+            <option value="Available" className="bg-[#0b0c13]">Available</option>
+            <option value="On Trip" className="bg-[#0b0c13]">On Trip</option>
+            <option value="Off Duty" className="bg-[#0b0c13]">Off Duty</option>
+            <option value="Suspended" className="bg-[#0b0c13]">Suspended</option>
           </select>
         </div>
+
+        {/* Compliance Only Toggle */}
+        <button
+          onClick={() => setComplianceOnly(!complianceOnly)}
+          className={`ml-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+            complianceOnly
+              ? 'bg-red-500/10 text-red-400 border-red-500/30 shadow-[0_4px_15px_rgba(239,68,68,0.1)]'
+              : 'bg-white/[0.02] text-slate-400 border-white/10 hover:text-slate-200'
+          }`}
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Compliance Flags Only
+        </button>
       </div>
 
       {/* Grid table */}
-      <div className="bg-[#1A1D27] border border-[#2E3148] rounded-lg overflow-hidden">
+      <div className="glass-card overflow-hidden bg-slate-900/15">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-[#151821] text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-[#2E3148]">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950/40 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-white/5">
               <tr>
                 <th className="px-6 py-4">Driver</th>
                 <th className="px-6 py-4">License No.</th>
@@ -205,62 +286,56 @@ export function DriversPage() {
                 <th className="px-6 py-4">Expiry</th>
                 <th className="px-6 py-4">Contact</th>
                 <th className="px-6 py-4 text-right">Trip Compl.</th>
-                <th className="px-6 py-4">Scheduling Status</th>
-                {canAddDriver && <th className="px-6 py-4">Quick Status Switch</th>}
+                <th className="px-6 py-4">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2E3148]">
+            <tbody className="divide-y divide-white/[0.04]">
               {loading ? (
                 <tr>
-                  <td colSpan={canAddDriver ? 8 : 7} className="px-6 py-12 text-center text-slate-500 font-medium">
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-medium">
                     Loading drivers...
                   </td>
                 </tr>
               ) : filteredDrivers.length > 0 ? (
                 filteredDrivers.map((driver) => {
-                  const isExpired = checkExpired(driver.license_expiry);
+                  const { expired, expiringSoon, daysLeft } = getExpiryDetails(driver.license_expiry);
+                  const rowClass = expired 
+                    ? 'bg-red-950/15 hover:bg-red-950/20 border-l-2 border-l-red-500/80 transition-all duration-200' 
+                    : 'hover:bg-white/[0.02] transition-colors duration-200';
+                  
                   return (
-                    <tr key={driver.id} className="hover:bg-[#232635] transition-colors">
-                      <td className="px-6 py-4 font-medium text-white">{driver.name}</td>
-                      <td className="px-6 py-4 font-mono">{driver.license_number}</td>
+                    <tr key={driver.id} className={rowClass}>
+                      <td className="px-6 py-4 font-bold text-white">{driver.name}</td>
+                      <td className="px-6 py-4 font-mono font-semibold">{driver.license_number}</td>
                       <td className="px-6 py-4 text-slate-400">{driver.license_category}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className={isExpired ? 'text-red-400 font-semibold' : 'text-slate-300'}>
+                          <span className={expired ? 'text-red-400 font-bold' : expiringSoon ? 'text-amber-400 font-bold' : 'text-slate-300 font-medium'}>
                             {formatDate(driver.license_expiry)}
                           </span>
-                          {isExpired && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 ring-1 ring-red-500/20 px-1.5 py-0.5 rounded">
-                              Expired
+                          {expired && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded-md">
+                              EXPIRED
+                            </span>
+                          )}
+                          {expiringSoon && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded-md">
+                              {daysLeft}d left
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-400">{driver.contact_number}</td>
-                      <td className="px-6 py-4 text-right font-mono text-slate-300">{driver.trip_completion_rate}%</td>
+                      <td className="px-6 py-4 text-slate-400 font-semibold">{driver.contact_number}</td>
+                      <td className="px-6 py-4 text-right font-mono text-slate-300 font-semibold">{driver.trip_completion_rate}%</td>
                       <td className="px-6 py-4">
                         <StatusBadge status={driver.safety_status as StatusType} />
                       </td>
-                      {canAddDriver && (
-                        <td className="px-6 py-4">
-                          <select
-                            value={driver.safety_status}
-                            onChange={(e) => handleStatusChange(driver.id, e.target.value as Driver['safety_status'])}
-                            className="bg-[#0F1117] text-white text-[11px] border border-[#2E3148] rounded-md px-2 py-1 focus:outline-none focus:border-[#4B5280] font-medium"
-                          >
-                            <option value="available">Available</option>
-                            <option value="on_trip">On Trip</option>
-                            <option value="off_duty">Off Duty</option>
-                            <option value="suspended">Suspended</option>
-                          </select>
-                        </td>
-                      )}
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={canAddDriver ? 8 : 7} className="px-6 py-12 text-center text-slate-500 font-medium">
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-medium">
                     No drivers found matching the filters.
                   </td>
                 </tr>
@@ -270,19 +345,19 @@ export function DriversPage() {
         </div>
 
         {/* Footer Note */}
-        <div className="bg-[#151821] px-6 py-3 border-t border-[#2E3148] text-xs text-slate-500 font-medium">
+        <div className="bg-slate-950/40 px-6 py-3 border-t border-white/5 text-[10px] text-slate-500 font-bold uppercase tracking-wide">
           Rule: Expired license or Suspended status → blocked from trip assignment
         </div>
       </div>
 
       {/* Add Driver Modal */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1A1D27] border border-[#2E3148] rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="glass-card w-full max-w-md overflow-hidden bg-slate-950/80 backdrop-blur-2xl border border-white/5 shadow-2xl">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-[#2E3148] flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-[#F59E0B]" />
+                <UserPlus className="h-5 w-5 text-[#7b39fc]" />
                 Register New Driver
               </h3>
               <button
@@ -296,7 +371,7 @@ export function DriversPage() {
             {/* Modal Form */}
             <form onSubmit={handleAddDriver} className="p-6 space-y-4">
               {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex gap-2 text-xs text-red-400">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-2 text-xs text-red-400">
                   <ShieldAlert className="h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -304,31 +379,31 @@ export function DriversPage() {
 
               {/* Driver Name */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Driver Name
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Alex"
+                  placeholder="e.g. Alex Crawford"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
               {/* License Number */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   License Number
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. DL-88213"
+                  placeholder="e.g. DL-88213778"
                   value={newLicenseNo}
                   onChange={(e) => setNewLicenseNo(e.target.value)}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
@@ -336,63 +411,63 @@ export function DriversPage() {
               <div className="grid grid-cols-2 gap-4">
                 {/* Category */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                     Category
                   </label>
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value as 'LMV' | 'HMV')}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                    className="w-full bg-white/[0.02] cursor-pointer"
                   >
-                    <option value="LMV">LMV (Light Motor Vehicle)</option>
-                    <option value="HMV">HMV (Heavy Motor Vehicle)</option>
+                    <option value="LMV" className="bg-[#0b0c13]">LMV</option>
+                    <option value="HMV" className="bg-[#0b0c13]">HMV</option>
                   </select>
                 </div>
 
                 {/* Expiry */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    License Expiry
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    Expiry Date
                   </label>
                   <input
                     type="date"
                     required
                     value={newExpiry}
                     onChange={(e) => setNewExpiry(e.target.value)}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium text-slate-300"
+                    className="w-full bg-white/[0.02]"
                   />
                 </div>
               </div>
 
               {/* Contact */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Contact Number
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 98765xxxxx"
+                  placeholder="e.g. 9876543210"
                   value={newContact}
                   onChange={(e) => setNewContact(e.target.value)}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
               {/* Form Action Buttons */}
-              <div className="pt-4 border-t border-[#2E3148] flex justify-end gap-3">
+              <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 border border-[#2E3148] hover:bg-[#232635] text-slate-300 rounded-lg text-sm font-semibold cursor-pointer transition-colors"
+                  className="px-4 py-2 border border-white/10 hover:bg-white/[0.03] text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#F59E0B] hover:bg-[#D97706] text-[#0F1117] rounded-lg text-sm font-semibold cursor-pointer transition-colors"
+                  className="px-4 py-2 bg-[#7b39fc] hover:bg-[#6c2ee0] text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
                 >
-                  Add Driver
+                  Register
                 </button>
               </div>
             </form>

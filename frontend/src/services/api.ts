@@ -14,6 +14,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 403) {
+      const serverMessage = error.response.data?.error || 'Access Denied: Forbidden action.';
+      const event = new CustomEvent('api-forbidden-error', { detail: serverMessage });
+      window.dispatchEvent(event);
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Vehicles
 export const getVehicles = () => api.get('/vehicles');
 export const createVehicle = (data: object) => api.post('/vehicles', data);

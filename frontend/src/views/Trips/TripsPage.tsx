@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, ClipboardList, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
+import { Play, ClipboardList, ShieldAlert, CheckCircle2, Download, CheckCircle } from 'lucide-react';
 import { useRole } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { StatusBadge } from '../../components/shared/StatusBadge';
@@ -17,6 +17,7 @@ interface Vehicle {
   reg_number: string;
   model: string;
   max_load_capacity: number; // in kg
+  odometer: number;
   status: 'available' | 'on_trip' | 'in_shop' | 'retired';
 }
 
@@ -36,7 +37,7 @@ interface Trip {
   driver_name?: string;
   cargo_weight: number;
   planned_distance: number;
-  status: 'draft' | 'dispatched' | 'completed' | 'cancelled';
+  status: 'draft' | 'dispatched' | 'completed';
   contextNote?: string;
 }
 
@@ -57,7 +58,6 @@ export function TripsPage() {
   const [plannedDistance, setPlannedDistance] = useState('38');
   
   // Validation state
-  const [validationError, setValidationError] = useState('');
   const [formError, setFormError] = useState('');
 
   // Complete modal state
@@ -78,6 +78,7 @@ export function TripsPage() {
         reg_number: v.regNumber,
         model: v.model,
         max_load_capacity: v.maxLoadCapacity,
+        odometer: v.odometer,
         status: v.status.toLowerCase().replace(/ /g, '_')
       }));
 
@@ -88,21 +89,23 @@ export function TripsPage() {
         safety_status: d.status.toLowerCase().replace(/ /g, '_')
       }));
 
-      const mappedTrips = tRes.data.map((t: any) => {
-        const matchedDriver = mappedDrivers.find((d: any) => d.id === t.driverId);
-        return {
-          id: t.id,
-          source: t.source,
-          destination: t.destination,
-          vehicle_reg: t.vehicleReg,
-          driver_id: t.driverId,
-          driver_name: matchedDriver ? matchedDriver.name : `Driver #${t.driverId}`,
-          cargo_weight: t.cargoWeight,
-          planned_distance: t.plannedDistance,
-          status: t.status.toLowerCase() as any,
-          contextNote: t.status === 'Dispatched' ? 'In transit' : t.status === 'Completed' ? 'Finished' : 'Pending dispatch'
-        };
-      });
+      const mappedTrips = tRes.data
+        .map((t: any) => {
+          const matchedDriver = mappedDrivers.find((d: any) => d.id === t.driverId);
+          return {
+            id: t.id,
+            source: t.source,
+            destination: t.destination,
+            vehicle_reg: t.vehicleReg,
+            driver_id: t.driverId,
+            driver_name: matchedDriver ? matchedDriver.name : `Driver #${t.driverId}`,
+            cargo_weight: t.cargoWeight,
+            planned_distance: t.plannedDistance,
+            status: t.status.toLowerCase() as any,
+            contextNote: t.status === 'Dispatched' ? 'In transit' : t.status === 'Completed' ? 'Finished' : ''
+          };
+        })
+        .filter((t: any) => t.status !== 'cancelled'); // Strip cancelled trips
 
       setVehicles(mappedVehicles);
       setDrivers(mappedDrivers);
@@ -118,10 +121,8 @@ export function TripsPage() {
     fetchData();
   }, []);
 
-  // Check RBAC write permission (Only Dispatcher can create/dispatch trips)
   const canDispatch = role === 'Dispatcher';
 
-  // Filter available items for selectors
   const availableVehicles = vehicles.filter(v => v.status === 'available');
   
   const isLicenseExpired = (expiry: string) => {
@@ -132,23 +133,11 @@ export function TripsPage() {
     d.safety_status === 'available' && !isLicenseExpired(d.license_expiry)
   );
 
-  const selectedVehicle = vehicles.find(v => v.reg_number === selectedVehicleReg);
-
-  // Dynamic cargo weight capacity checking
-  useEffect(() => {
-    if (selectedVehicle && cargoWeight) {
-      const weight = Number(cargoWeight);
-      if (weight > selectedVehicle.max_load_capacity) {
-        setValidationError(
-          `Vehicle Capacity: ${selectedVehicle.max_load_capacity} kg | Cargo Weight: ${weight} kg | ❌ Capacity exceeded by ${weight - selectedVehicle.max_load_capacity} kg – dispatch blocked`
-        );
-      } else {
-        setValidationError('');
-      }
-    } else {
-      setValidationError('');
-    }
-  }, [selectedVehicleReg, cargoWeight, vehicles]);
+  const selectedVehicleObj = vehicles.find(v => v.reg_number === selectedVehicleReg);
+  const capacityRatio = selectedVehicleObj && cargoWeight 
+    ? (Number(cargoWeight) / selectedVehicleObj.max_load_capacity) * 100 
+    : 0;
+  const isOverloaded = capacityRatio > 100;
 
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +148,7 @@ export function TripsPage() {
       return;
     }
 
-    if (validationError) {
+    if (isOverloaded) {
       setFormError('Cannot dispatch trip: vehicle capacity exceeded.');
       return;
     }
@@ -196,7 +185,7 @@ export function TripsPage() {
   const handleDispatchDraft = async (id: number) => {
     try {
       await dispatchTrip(id);
-      showToast('Trip dispatched!', 'success');
+      showToast('Trip dispatched successfully!', 'success');
       fetchData();
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to dispatch trip.', 'error');
@@ -207,17 +196,22 @@ export function TripsPage() {
     e.preventDefault();
     if (!activeCompleteTripId) return;
 
+    if (Number(actualDistance) <= 0) {
+      showToast('Actual distance must be greater than 0 km.', 'error');
+      return;
+    }
+
     try {
       const payload = {
         actualDistance: Number(actualDistance),
-        fuelLiters: Number(fuelLiters),
-        fuelCost: Number(fuelCost),
-        tollCost: Number(tollCost),
-        otherCost: Number(otherCost)
+        fuelLiters: Number(fuelLiters) || 0,
+        fuelCost: Number(fuelCost) || 0,
+        tollCost: Number(tollCost) || 0,
+        otherCost: Number(otherCost) || 0
       };
 
       await completeTrip(activeCompleteTripId, payload);
-      showToast('Trip completed and expenses logged!', 'success');
+      showToast('Trip marked Completed successfully!', 'success');
       setCompleteModalOpen(false);
       
       // Reset inputs
@@ -233,47 +227,67 @@ export function TripsPage() {
     }
   };
 
+  const exportTripsCSV = () => {
+    const headers = ['Trip ID', 'Vehicle Reg', 'Driver', 'Source', 'Destination', 'Cargo Weight (kg)', 'Planned Distance (km)', 'Status'];
+    const rows = trips.map(t => [
+      `TR-${t.id}`,
+      t.vehicle_reg,
+      t.driver_name || `Driver #${t.driver_id}`,
+      t.source,
+      t.destination,
+      t.cargo_weight,
+      t.planned_distance,
+      t.status.toUpperCase()
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `trips_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Trips log exported to CSV successfully', 'success');
+  };
+
+  // Find odometer stats for the active completion modal
+  const matchedTrip = trips.find(t => t.id === activeCompleteTripId);
+  const matchedVehicle = matchedTrip ? vehicles.find(v => v.reg_number === matchedTrip.vehicle_reg) : null;
+  const currentOdo = matchedVehicle ? matchedVehicle.odometer : 0;
+  const nextOdo = currentOdo + (Number(actualDistance) || 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-manrope">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Trip Dispatcher</h2>
-        <p className="text-sm text-slate-400">Plan routes, allocate fleet capacity, and track assignments in real-time</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-white font-instrument">Trip Dispatcher</h2>
+          <p className="text-sm text-slate-400">Plan routes, allocate fleet capacity, and track assignments in real-time</p>
+        </div>
+        <button
+          onClick={exportTripsCSV}
+          className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition-colors active:scale-[0.98]"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
       </div>
 
       {/* Split layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Create Trip Form (45%) */}
-        <div className="lg:col-span-5 bg-[#1A1D27] border border-[#2E3148] rounded-xl overflow-hidden p-6 space-y-6">
-          <div className="flex items-center gap-2 border-b border-[#2E3148] pb-4">
-            <ClipboardList className="h-5 w-5 text-[#F59E0B]" />
-            <h3 className="text-base font-semibold text-white">Create Route Assignment</h3>
-          </div>
-
-          {/* Stepper progress indicator */}
-          <div className="relative flex justify-between items-center text-xs">
-            <div className="absolute left-0 right-0 h-0.5 bg-[#2E3148] top-3 z-0" />
-            <div className="z-10 flex flex-col items-center gap-1.5">
-              <span className="h-6 w-6 rounded-full bg-[#10B981] flex items-center justify-center font-bold text-white text-[11px] ring-4 ring-[#1A1D27]">1</span>
-              <span className="text-[#10B981] font-semibold">Draft</span>
-            </div>
-            <div className="z-10 flex flex-col items-center gap-1.5">
-              <span className="h-6 w-6 rounded-full bg-[#3B82F6] flex items-center justify-center font-bold text-white text-[11px] ring-4 ring-[#1A1D27]">2</span>
-              <span className="text-[#3B82F6] font-semibold">Dispatched</span>
-            </div>
-            <div className="z-10 flex flex-col items-center gap-1.5">
-              <span className="h-6 w-6 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-400 text-[11px] ring-4 ring-[#1A1D27]">3</span>
-              <span className="text-slate-500 font-medium">Completed</span>
-            </div>
-            <div className="z-10 flex flex-col items-center gap-1.5">
-              <span className="h-6 w-6 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-400 text-[11px] ring-4 ring-[#1A1D27]">4</span>
-              <span className="text-slate-500 font-medium">Cancelled</span>
-            </div>
+        <div className="lg:col-span-5 glass-card overflow-hidden p-6 space-y-5 bg-slate-900/15">
+          <div className="flex items-center gap-2 border-b border-white/5 pb-4.5">
+            <ClipboardList className="h-5 w-5 text-[#7b39fc]" />
+            <h3 className="text-base font-bold text-white tracking-wide">Create Route Assignment</h3>
           </div>
 
           <form onSubmit={handleCreateTrip} className="space-y-4">
             {formError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex gap-2 text-xs text-red-400">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-2 text-xs text-red-400">
                 <ShieldAlert className="h-4 w-4 flex-shrink-0" />
                 <span>{formError}</span>
               </div>
@@ -282,7 +296,7 @@ export function TripsPage() {
             {/* Source & Destination */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Source Depot
                 </label>
                 <input
@@ -291,12 +305,12 @@ export function TripsPage() {
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
                   disabled={!canDispatch}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Destination
                 </label>
                 <input
@@ -305,26 +319,26 @@ export function TripsPage() {
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
                   disabled={!canDispatch}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
             </div>
 
             {/* Vehicle Select */}
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                 Vehicle (Available Only)
               </label>
               <select
                 value={selectedVehicleReg}
                 onChange={(e) => setSelectedVehicleReg(e.target.value)}
                 disabled={!canDispatch}
-                className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                className="w-full bg-white/[0.02] cursor-pointer"
               >
-                <option value="">Select a vehicle...</option>
+                <option value="" className="bg-[#0b0c13]">Select a vehicle...</option>
                 {availableVehicles.map(v => (
-                  <option key={v.reg_number} value={v.reg_number}>
-                    {v.model} ({v.max_load_capacity} kg max)
+                  <option key={v.reg_number} value={v.reg_number} className="bg-[#0b0c13]">
+                    {v.model} - {v.reg_number} ({v.max_load_capacity} kg capacity)
                   </option>
                 ))}
               </select>
@@ -332,18 +346,18 @@ export function TripsPage() {
 
             {/* Driver Select */}
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                 Driver (Available Only)
               </label>
               <select
                 value={selectedDriverId}
                 onChange={(e) => setSelectedDriverId(e.target.value)}
                 disabled={!canDispatch}
-                className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                className="w-full bg-white/[0.02] cursor-pointer"
               >
-                <option value="">Select a driver...</option>
+                <option value="" className="bg-[#0b0c13]">Select a driver...</option>
                 {availableDrivers.map(d => (
-                  <option key={d.id} value={d.id}>
+                  <option key={d.id} value={d.id} className="bg-[#0b0c13]">
                     {d.name} (License OK)
                   </option>
                 ))}
@@ -353,7 +367,7 @@ export function TripsPage() {
             {/* Cargo Weight & Distance */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Cargo Weight (kg)
                 </label>
                 <input
@@ -363,12 +377,12 @@ export function TripsPage() {
                   value={cargoWeight}
                   onChange={(e) => setCargoWeight(e.target.value)}
                   disabled={!canDispatch}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Planned Distance (km)
                 </label>
                 <input
@@ -378,19 +392,35 @@ export function TripsPage() {
                   value={plannedDistance}
                   onChange={(e) => setPlannedDistance(e.target.value)}
                   disabled={!canDispatch}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium disabled:opacity-50"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
             </div>
 
-            {/* Dynamic Warning Card */}
-            {validationError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
-                  <ShieldAlert className="h-4 w-4" />
-                  <span>Dispatch Blocked</span>
+            {/* Dynamic Cargo Load Capacity progress bar */}
+            {selectedVehicleObj && (
+              <div className="space-y-1.5 mt-2 bg-slate-950/20 p-3 rounded-xl border border-white/5">
+                <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider">
+                  <span className="text-slate-400">Cargo Load Ratio</span>
+                  <span className={`${
+                    capacityRatio > 100 ? 'text-red-400 font-extrabold animate-pulse' : capacityRatio >= 85 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'
+                  }`}>
+                    {capacityRatio.toFixed(1)}% ({cargoWeight}kg / {selectedVehicleObj.max_load_capacity}kg)
+                  </span>
                 </div>
-                <p className="font-medium text-red-300">{validationError}</p>
+                <div className="w-full h-2 bg-slate-950/60 rounded-full overflow-hidden border border-white/5">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      capacityRatio > 100 ? 'bg-red-500' : capacityRatio >= 85 ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(capacityRatio, 100)}%` }}
+                  />
+                </div>
+                {isOverloaded && (
+                  <p className="text-[10px] font-extrabold text-red-400 uppercase tracking-wide flex items-center gap-1 mt-1">
+                    <ShieldAlert className="h-3.5 w-3.5" /> Over capacity — blocked
+                  </p>
+                )}
               </div>
             )}
 
@@ -403,21 +433,21 @@ export function TripsPage() {
                     setSelectedVehicleReg('');
                     setSelectedDriverId('');
                   }}
-                  className="px-4 py-2 border border-[#2E3148] hover:bg-[#232635] text-slate-300 rounded-lg text-sm font-semibold cursor-pointer transition-colors"
+                  className="px-4 py-2 border border-white/10 hover:bg-white/[0.03] text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
                 >
                   Clear
                 </button>
                 <button
                   type="submit"
-                  disabled={!!validationError}
-                  className="px-4 py-2 bg-[#F59E0B] hover:bg-[#D97706] disabled:bg-slate-700 disabled:text-slate-500 text-[#0F1117] rounded-lg text-sm font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                  disabled={isOverloaded || !selectedVehicleReg || !selectedDriverId}
+                  className="px-4 py-2 bg-[#7b39fc] hover:bg-[#6c2ee0] disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.98] flex items-center gap-1.5"
                 >
-                  <Play className="h-3.5 w-3.5 fill-[#0F1117]" />
+                  <Play className="h-3.5 w-3.5 fill-white" />
                   Dispatch
                 </button>
               </div>
             ) : (
-              <div className="text-center p-3 bg-[#151821] border border-[#2E3148] rounded-lg text-xs text-slate-400 font-medium">
+              <div className="text-center p-3.5 bg-slate-950/40 border border-white/5 rounded-xl text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                 🔒 Access Restricted. Only a Dispatcher can schedule route dispatches.
               </div>
             )}
@@ -426,31 +456,31 @@ export function TripsPage() {
 
         {/* Live Board (55%) */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="bg-[#1A1D27] border border-[#2E3148] rounded-xl p-4 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-white">Live Operations Board</h3>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              {trips.length} active assignments
+          <div className="glass-card p-4 flex items-center justify-between bg-slate-900/15">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Live Operations Board</h3>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              {trips.length} active assignment{trips.length !== 1 ? 's' : ''}
             </span>
           </div>
 
           <div className="space-y-3">
             {loading ? (
-              <div className="bg-[#1A1D27] border border-[#2E3148] rounded-lg p-8 text-center text-slate-500 font-medium">
+              <div className="glass-card p-8 text-center text-slate-500 font-medium">
                 Loading live operations board...
               </div>
             ) : trips.length > 0 ? (
               trips.map((trip) => (
-                <div key={trip.id} className="bg-[#1A1D27] border border-[#2E3148] rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div key={trip.id} className="glass-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/15">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono font-bold text-[#F59E0B]">TR-{trip.id}</span>
-                      <span className="text-xs text-slate-400 font-medium">
-                        {trip.vehicle_reg} / {trip.driver_name}
+                      <span className="text-xs font-mono font-extrabold text-[#7b39fc]">TR-{trip.id}</span>
+                      <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+                        {trip.vehicle_reg} • {trip.driver_name}
                       </span>
                     </div>
-                    <div className="text-sm font-medium text-white flex items-center gap-2">
+                    <div className="text-sm font-bold text-white flex items-center gap-2">
                       <span>{trip.source}</span>
-                      <span className="text-[#2E3148]">➔</span>
+                      <span className="text-slate-600 font-mono">➔</span>
                       <span>{trip.destination}</span>
                     </div>
                   </div>
@@ -459,7 +489,7 @@ export function TripsPage() {
                     <div className="flex flex-col items-start md:items-end gap-1">
                       <StatusBadge status={trip.status as StatusType} />
                       {trip.contextNote && (
-                        <span className="text-[10px] text-slate-400 font-semibold">{trip.contextNote}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{trip.contextNote}</span>
                       )}
                     </div>
 
@@ -467,7 +497,7 @@ export function TripsPage() {
                     {trip.status === 'draft' && (
                       <button
                         onClick={() => handleDispatchDraft(trip.id)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded transition-colors cursor-pointer"
+                        className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-[0.98]"
                       >
                         Dispatch
                       </button>
@@ -478,9 +508,13 @@ export function TripsPage() {
                         onClick={() => {
                           setActiveCompleteTripId(trip.id);
                           setActualDistance(String(trip.planned_distance)); // default to planned
+                          setFuelLiters('');
+                          setFuelCost('');
+                          setTollCost('');
+                          setOtherCost('');
                           setCompleteModalOpen(true);
                         }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded transition-colors cursor-pointer"
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer active:scale-[0.98]"
                       >
                         Complete
                       </button>
@@ -489,13 +523,13 @@ export function TripsPage() {
                 </div>
               ))
             ) : (
-              <div className="bg-[#1A1D27] border border-[#2E3148] rounded-lg p-8 text-center text-slate-500 font-medium">
+              <div className="glass-card p-8 text-center text-slate-500 font-medium bg-slate-900/15">
                 No trips scheduled yet. Use the form to plan one.
               </div>
             )}
           </div>
 
-          <div className="bg-[#1A1D27] border border-[#2E3148] p-4 rounded-lg text-xs text-slate-500 font-medium">
+          <div className="bg-slate-950/40 border border-white/5 p-4 rounded-xl text-[10px] text-slate-500 font-bold uppercase tracking-wider">
             💡 On Complete: Odometer gets updated → fuel & maintenance logs gets recorded → vehicle & driver returns to Available pool.
           </div>
         </div>
@@ -503,11 +537,11 @@ export function TripsPage() {
 
       {/* Complete Trip Modal */}
       {completeModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1A1D27] border border-[#2E3148] rounded-xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b border-[#2E3148] flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="glass-card w-full max-w-md overflow-hidden bg-slate-950/80 backdrop-blur-2xl border border-white/5 shadow-2xl">
+            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <CheckCircle className="h-5 w-5 text-emerald-500" />
                 Complete Trip & Log Costs
               </h3>
               <button 
@@ -520,7 +554,7 @@ export function TripsPage() {
 
             <form onSubmit={handleCompleteTripSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                   Actual Distance Traveled (km)
                 </label>
                 <input
@@ -529,14 +563,28 @@ export function TripsPage() {
                   min="1"
                   value={actualDistance}
                   onChange={(e) => setActualDistance(e.target.value)}
-                  className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                  className="w-full bg-white/[0.02]"
                 />
               </div>
 
+              {/* Odometer progression live preview */}
+              {matchedVehicle && (
+                <div className="p-3.5 bg-slate-950/40 border border-white/5 rounded-xl text-xs text-slate-300 font-semibold select-none flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Odo Progression:</span>
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <span className="text-slate-400 font-bold">{currentOdo.toLocaleString()} km</span> 
+                    <span className="text-slate-600">➔</span> 
+                    <span className={Number(actualDistance) <= 0 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
+                      {nextOdo.toLocaleString()} km
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Fuel Consumed (Liters)
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    Fuel Consumed (L)
                   </label>
                   <input
                     type="number"
@@ -546,13 +594,13 @@ export function TripsPage() {
                     placeholder="0"
                     value={fuelLiters}
                     onChange={(e) => setFuelLiters(e.target.value)}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                    className="w-full bg-white/[0.02]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Fuel Cost (Rs)
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    Fuel Cost (₹)
                   </label>
                   <input
                     type="number"
@@ -561,15 +609,15 @@ export function TripsPage() {
                     placeholder="0"
                     value={fuelCost}
                     onChange={(e) => setFuelCost(e.target.value)}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                    className="w-full bg-white/[0.02]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Toll Expenses (Rs)
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    Toll Expenses (₹)
                   </label>
                   <input
                     type="number"
@@ -578,13 +626,13 @@ export function TripsPage() {
                     placeholder="0"
                     value={tollCost}
                     onChange={(e) => setTollCost(e.target.value)}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                    className="w-full bg-white/[0.02]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Other Expenses (Rs)
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                    Other Expenses (₹)
                   </label>
                   <input
                     type="number"
@@ -593,22 +641,23 @@ export function TripsPage() {
                     placeholder="0"
                     value={otherCost}
                     onChange={(e) => setOtherCost(e.target.value)}
-                    className="w-full bg-[#0F1117] text-white border border-[#2E3148] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#4B5280] font-medium"
+                    className="w-full bg-white/[0.02]"
                   />
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-[#2E3148] flex justify-end gap-3">
+              <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setCompleteModalOpen(false)}
-                  className="px-4 py-2 border border-[#2E3148] hover:bg-[#232635] text-slate-300 rounded-lg text-sm font-semibold cursor-pointer transition-colors"
+                  className="px-4 py-2 border border-white/10 hover:bg-white/[0.03] text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold cursor-pointer transition-colors"
+                  disabled={Number(actualDistance) <= 0 || loading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors active:scale-[0.98]"
                 >
                   Submit Completion
                 </button>

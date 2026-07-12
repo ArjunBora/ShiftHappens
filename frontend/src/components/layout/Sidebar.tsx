@@ -1,148 +1,65 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
 import { 
   LayoutDashboard, 
   Truck, 
   Users, 
   Map, 
-  Wrench, 
   Fuel, 
   BarChart3, 
-  Settings,
-  Shield,
-  ChevronUp
+  Settings
 } from 'lucide-react';
-import { useRole } from '../../context/AuthContext';
-import type { Role } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'] },
-  { label: 'Fleet', path: '/fleet', icon: Truck, roles: ['Fleet Manager', 'Dispatcher', 'Financial Analyst'] },
-  { label: 'Drivers', path: '/drivers', icon: Users, roles: ['Fleet Manager', 'Safety Officer'] },
-  { label: 'Trips', path: '/trips', icon: Map, roles: ['Dispatcher', 'Safety Officer'] },
-  { label: 'Maintenance', path: '/maintenance', icon: Wrench, roles: ['Fleet Manager'] },
-  { label: 'Fuel & Expenses', path: '/expenses', icon: Fuel, roles: ['Financial Analyst'] },
-  { label: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['Fleet Manager', 'Financial Analyst'] },
-  { label: 'Settings', path: '/settings', icon: Settings, roles: ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'] },
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Fleet', path: '/fleet', icon: Truck },
+  { label: 'Drivers', path: '/drivers', icon: Users },
+  { label: 'Trips', path: '/trips', icon: Map },
+  { label: 'Expenses & Logs', path: '/expenses', icon: Fuel },
+  { label: 'Analytics', path: '/analytics', icon: BarChart3 },
+  { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
-const ROLES: Role[] = ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'];
-
 export function Sidebar() {
-  const { role, setRole } = useRole();
-  const [isRbacOpen, setIsRbacOpen] = useState(false);
-
-  const handleRoleChange = (newRole: Role) => {
-    setRole(newRole);
-    localStorage.setItem('simulated_role', newRole);
-    setIsRbacOpen(false);
-  };
-
-  // Filter nav items based on permissions matrix
-  const filteredNavItems = NAV_ITEMS.filter(item => item.roles.includes(role));
-
   return (
-    <aside className="w-64 bg-white/[0.02] backdrop-blur-3xl border-r border-white/5 flex flex-col h-screen text-slate-300 relative z-20">
+    <aside className="w-64 bg-slate-950/40 backdrop-blur-2xl border-r border-white/5 flex flex-col h-screen text-slate-300 relative z-20">
       {/* Branding */}
       <div className="p-6 border-b border-white/5 flex items-center gap-3 relative overflow-hidden">
-        <div className="bg-gradient-to-tr from-[#F59E0B] to-amber-300 p-2 rounded-md shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
-          <Truck className="h-6 w-6 text-[#0F1117]" />
+        <div className="bg-gradient-to-tr from-[#7b39fc] to-[#a277ff] p-2.5 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] shadow-lg shadow-purple-500/10">
+          <Truck className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-white tracking-wide drop-shadow-md">TransitOps</h1>
-          <p className="text-xs text-slate-400 font-medium">Smart Fleet System</p>
+          <h1 className="text-base font-bold text-white tracking-wide drop-shadow-md">TransitOps</h1>
+          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Fleet Core</p>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-3 overflow-y-auto">
-        {filteredNavItems.map((item) => {
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-300 active:scale-[0.98] ${
+                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97] border ${
                   isActive
-                    ? 'glass-panel text-white'
-                    : 'hover:bg-white/5 hover:text-white border border-transparent'
+                    ? 'bg-purple-500/8 text-[#7b39fc] border-purple-500/15 shadow-[0_4px_20px_rgba(123,57,252,0.05)] font-semibold'
+                    : 'hover:bg-white/[0.03] hover:text-white border-transparent'
                 }`
               }
             >
-              <Icon className="h-4 w-4" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <Icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-[#7b39fc]' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </>
+              )}
             </NavLink>
           );
         })}
       </nav>
-
-      {/* Collapsible RBAC Simulator */}
-      <div className="p-4 border-t border-white/5">
-        {/* Toggle Header */}
-        <button
-          onClick={() => setIsRbacOpen(v => !v)}
-          className="w-full flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-0 hover:text-slate-200 transition-colors duration-200 cursor-pointer group"
-        >
-          <span className="flex items-center gap-2">
-            <Shield className="h-3 w-3 text-[#F59E0B]" />
-            RBAC Simulator
-          </span>
-          <motion.div
-            animate={{ rotate: isRbacOpen ? 0 : 180 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          >
-            <ChevronUp className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
-          </motion.div>
-        </button>
-
-        {/* Active role pill — always visible */}
-        <AnimatePresence>
-          {!isRbacOpen && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15 }}
-              className="text-[11px] text-slate-500 mt-1.5 pl-5 truncate"
-            >
-              {role}
-            </motion.p>
-          )}
-        </AnimatePresence>
-
-        {/* Expandable role list */}
-        <AnimatePresence>
-          {isRbacOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-2 space-y-1">
-                {ROLES.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => handleRoleChange(r)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 active:scale-[0.98] ${
-                      role === r
-                        ? 'glass-panel text-white'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
     </aside>
   );
 }
-
-
