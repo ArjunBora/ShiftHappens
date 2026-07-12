@@ -118,6 +118,42 @@ npm run dev
 
 ---
 
+## Data Entry & Management
+
+Shift Happens provides intuitive modal interfaces and forms for system data entry. Access to these data entry points is governed by the Role-Based Access Control (RBAC) system:
+
+### 1. Vehicle Registration (Fleet Page)
+- **Role Required:** Fleet Manager
+- **Access:** Click the "Add Vehicle" button.
+- **Fields:** Registration Number (unique), Model/Name, Vehicle Type (Van, Truck, Mini), Capacity (kg), Initial Odometer (km), and Acquisition Cost.
+- **Validation:** Ensures registration uniqueness and positive numerical values for capacity, odometer, and cost.
+
+### 2. Maintenance Logging (Fleet Page & Maintenance Page)
+- **Role Required:** Fleet Manager
+- **Access:** Click the "Send to Shop" button on an available vehicle.
+- **Fields:** Maintenance Job Description, Cost Estimate.
+- **Action:** Moves the vehicle status to "In Shop" and records a maintenance log.
+
+### 3. Driver Onboarding (Drivers Page)
+- **Role Required:** Fleet Manager or Safety Officer
+- **Access:** Click the "Add Driver" button.
+- **Fields:** Driver Name, License Number, Category (LMV, HMV), Expiry Date, and Contact Number.
+- **Validation:** Ensures license number uniqueness and verifies contact number format (10 digits).
+
+### 4. Trip Scheduling (Trips Page)
+- **Role Required:** Dispatcher
+- **Access:** Click the "Schedule Trip" button.
+- **Fields:** Route details, distance, and resource allocation.
+- **Action:** Creates a scheduled trip that can subsequently be dispatched.
+
+### 5. Financial & Expense Logging (Expenses Page)
+- **Role Required:** Financial Analyst
+- **Access:** Dedicated expense and fuel entry forms.
+- **Fields:** Expense Category, Amount, Date, and Description.
+- **Action:** Logs operational costs which automatically reflect in the Analytics dashboard.
+
+---
+
 ## Design and Accessibility Details
 - **Glassmorphism:** Styled containers use custom frosted panels (.glass-panel) with edge highlights (gradient border elements via before and after selectors) to optimize contrast and typography.
 - **Micro-Animations:** Interactive elements (buttons, inputs) utilize active:scale-[0.98] animations to provide tactile physical response.
