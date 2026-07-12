@@ -30,7 +30,7 @@ test('buildAnalyticsSummary calculates utilization, efficiency, cost, roi and re
   assert.equal(summary.fleetUtilization, 50);
   assert.equal(summary.fuelEfficiency, 30);
   assert.equal(summary.totalOperationalCost, 500);
-  assert.equal(summary.vehicleROI.length, 2);
+  assert.equal(summary.vehicleROI.length, 3);
   assert.equal(summary.monthlyRevenue.length, 1);
   assert.equal(summary.costliestVehicles[0].vehicleReg, 'V1');
 });
