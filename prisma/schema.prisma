@@ -47,6 +47,8 @@ model Trip {
   status           String    @default("Draft")
   vehicleReg       String    @map("vehicle_reg")
   driverId         Int       @map("driver_id")
+  revenue          Float     @default(0)
+  completedAt      DateTime? @map("completed_at")
   vehicle          Vehicle   @relation(fields: [vehicleReg], references: [regNumber])
   driver           Driver    @relation(fields: [driverId], references: [id])
   expenses         Expense[]
@@ -72,6 +74,7 @@ model FuelLog {
   cost       Float
   date       DateTime @default(now())
   vehicleReg String   @map("vehicle_reg")
+  tripId     Int?     @map("trip_id")
   vehicle    Vehicle  @relation(fields: [vehicleReg], references: [regNumber])
 
   @@map("fuel_logs")

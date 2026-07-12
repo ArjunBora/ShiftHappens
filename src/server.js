@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { checkRole } from './middleware/checkRole.js';
+import { buildAnalyticsSummary } from './analytics.js';
 
 dotenv.config();
 
@@ -37,11 +38,31 @@ app.post('/api/drivers', checkRole(['Fleet Manager', 'Safety Officer']), async (
 
 app.post('/api/trips', checkRole(['Dispatcher']), async (req, res) => {
   try {
-    const trip = await prisma.trip.create({ data: req.body });
+    const trip = await prisma.trip.create({
+      data: {
+        ...req.body,
+        revenue: req.body.revenue ?? (Number(req.body.plannedDistance || 0) * 50)
+      }
+    });
     res.status(201).json(trip);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+});
+
+app.get('/api/vehicles', async (req, res) => {
+  const vehicles = await prisma.vehicle.findMany();
+  res.json(vehicles);
+});
+
+app.get('/api/drivers', async (req, res) => {
+  const drivers = await prisma.driver.findMany();
+  res.json(drivers);
+});
+
+app.get('/api/trips', async (req, res) => {
+  const trips = await prisma.trip.findMany();
+  res.json(trips);
 });
 
 app.post('/api/expenses', checkRole(['Financial Analyst']), async (req, res) => {
@@ -114,10 +135,10 @@ app.post('/api/trips/:id/complete', async (req, res) => {
     }
 
     await prisma.$transaction([
-      prisma.trip.update({ where: { id: trip.id }, data: { status: 'Completed', actualDistance } }),
+      prisma.trip.update({ where: { id: trip.id }, data: { status: 'Completed', actualDistance, completedAt: new Date() } }),
       prisma.vehicle.update({ where: { regNumber: trip.vehicleReg }, data: { odometer: trip.vehicle.odometer + actualDistance, status: 'Available' } }),
       prisma.driver.update({ where: { id: trip.driverId }, data: { status: 'Available' } }),
-      prisma.fuelLog.create({ data: { liters: fuelLiters, cost: fuelCost, vehicleReg: trip.vehicleReg } }),
+      prisma.fuelLog.create({ data: { liters: fuelLiters, cost: fuelCost, vehicleReg: trip.vehicleReg, tripId: trip.id } }),
       prisma.expense.create({ data: { tollCost, otherCost, vehicleReg: trip.vehicleReg, tripId: trip.id } })
     ]);
 
@@ -176,23 +197,17 @@ app.patch('/api/maintenance/:id', async (req, res) => {
 app.get('/api/analytics/summary', async (req, res) => {
   try {
     const vehicles = await prisma.vehicle.findMany();
-    const completedTrips = await prisma.trip.findMany({ where: { status: 'Completed' } });
+    const trips = await prisma.trip.findMany();
     const fuelLogs = await prisma.fuelLog.findMany();
     const maintenanceLogs = await prisma.maintenanceLog.findMany();
     const expenses = await prisma.expense.findMany();
 
-    const fleetUtilization = vehicles.filter(v => v.status === 'On Trip').length / Math.max(vehicles.filter(v => v.status !== 'Retired').length, 1) * 100;
-    const fuelEfficiency = completedTrips.length
-      ? completedTrips.reduce((sum, trip) => sum + ((trip.actualDistance || 0) / Math.max(1, trip.cargoWeight || 1)), 0) / completedTrips.length
-      : 0;
-    const totalOperationalCost = fuelLogs.reduce((sum, log) => sum + log.cost, 0) + maintenanceLogs.reduce((sum, log) => sum + log.cost, 0) + expenses.reduce((sum, expense) => sum + expense.tollCost + expense.otherCost, 0);
+    const summary = buildAnalyticsSummary({ vehicles, trips, fuelLogs, maintenanceLogs, expenses });
 
     res.json({
-      fleetUtilization,
-      fuelEfficiency,
-      totalOperationalCost,
+      ...summary,
       vehicles: vehicles.length,
-      completedTrips: completedTrips.length
+      completedTrips: trips.filter((trip) => trip.status === 'Completed').length
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
