@@ -91,17 +91,17 @@ export function ExpensesPage() {
         setExpTrip(activeTrips[0]);
       }
 
-      // Safe fetch for fuel logs
+      // Safe fetch for fuel logs (merging with localStorage)
+      let fetchedFuel: FuelLog[] = [];
       try {
         const fRes = await getFuelLogs();
-        const mappedFuel = fRes.data.map((fl: any) => ({
+        fetchedFuel = fRes.data.map((fl: any) => ({
           id: fl.id,
           vehicle_reg: fl.vehicleReg,
           date: new Date(fl.date).toLocaleDateString('en-GB'),
           liters: fl.liters,
           cost: fl.cost
         }));
-        setFuelLogs(mappedFuel);
         setFuelLogsAvailable(true);
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -111,17 +111,27 @@ export function ExpensesPage() {
         }
       }
 
-      // Safe fetch for expenses
+      const localFuelString = localStorage.getItem('local_fuel_logs');
+      const localFuel: FuelLog[] = localFuelString ? JSON.parse(localFuelString) : [];
+      const combinedFuel = [...fetchedFuel];
+      localFuel.forEach(lf => {
+        if (!combinedFuel.some(cf => cf.id === lf.id)) {
+          combinedFuel.push(lf);
+        }
+      });
+      setFuelLogs(combinedFuel);
+
+      // Safe fetch for expenses (merging with localStorage)
+      let fetchedExpenses: OtherExpense[] = [];
       try {
         const eRes = await getExpenses();
-        const mappedExpenses = eRes.data.map((ex: any) => ({
+        fetchedExpenses = eRes.data.map((ex: any) => ({
           id: ex.id,
           trip_id: ex.tripId ? `TR-${ex.tripId}` : '—',
           vehicle_reg: ex.vehicleReg,
           toll: ex.tollCost,
           other: ex.otherCost
         }));
-        setOtherExpenses(mappedExpenses);
         setExpensesAvailable(true);
       } catch (err: any) {
         if (err.response?.status === 404) {
@@ -131,8 +141,17 @@ export function ExpensesPage() {
         }
       }
 
-      // Safe fetch for maintenance logs
-      // We will merge fetched logs with local storage logs to ensure the dispatcher flow works even if 404
+      const localExpensesString = localStorage.getItem('local_expenses_logs');
+      const localExpenses: OtherExpense[] = localExpensesString ? JSON.parse(localExpensesString) : [];
+      const combinedExpenses = [...fetchedExpenses];
+      localExpenses.forEach(le => {
+        if (!combinedExpenses.some(ce => ce.id === le.id)) {
+          combinedExpenses.push(le);
+        }
+      });
+      setOtherExpenses(combinedExpenses);
+
+      // Safe fetch for maintenance logs (merging with localStorage)
       let fetchedMaint: MaintenanceLog[] = [];
       try {
         const mRes = await getMaintenance();
@@ -193,8 +212,22 @@ export function ExpensesPage() {
         cost: Number(fuelCost)
       };
 
-      await createFuelLog(payload);
+      const res = await createFuelLog(payload);
       showToast('Fuel refueling logged successfully!', 'success');
+      
+      // Save created Fuel Log to localStorage so it gets rendered even if GET 404s
+      const localFuelLogsString = localStorage.getItem('local_fuel_logs');
+      const localFuelLogs = localFuelLogsString ? JSON.parse(localFuelLogsString) : [];
+      const newFuelLog = {
+        id: res.data.id || Date.now() + Math.random(),
+        vehicle_reg: fuelVehicle,
+        date: new Date().toLocaleDateString('en-GB'),
+        liters: Number(fuelLiters),
+        cost: Number(fuelCost)
+      };
+      localFuelLogs.push(newFuelLog);
+      localStorage.setItem('local_fuel_logs', JSON.stringify(localFuelLogs));
+
       setFuelLiters('');
       setFuelCost('');
       fetchData();
@@ -221,8 +254,22 @@ export function ExpensesPage() {
         otherCost: Number(expOther) || 0
       };
 
-      await createExpense(payload);
+      const res = await createExpense(payload);
       showToast('Expense logged successfully!', 'success');
+      
+      // Save created Expense to localStorage so it gets rendered even if GET 404s
+      const localExpensesString = localStorage.getItem('local_expenses_logs');
+      const localExpenses = localExpensesString ? JSON.parse(localExpensesString) : [];
+      const newExpense = {
+        id: res.data.id || Date.now() + Math.random(),
+        trip_id: expTrip ? `TR-${expTrip}` : '—',
+        vehicle_reg: expVehicle,
+        toll: Number(expToll) || 0,
+        other: Number(expOther) || 0
+      };
+      localExpenses.push(newExpense);
+      localStorage.setItem('local_expenses_logs', JSON.stringify(localExpenses));
+
       setExpToll('');
       setExpOther('');
       fetchData();
@@ -577,7 +624,7 @@ export function ExpensesPage() {
             <h3 className="text-xs font-bold text-white tracking-wide uppercase">Fuel History</h3>
             <button
               onClick={() => exportCSV('fuel')}
-              disabled={!fuelLogsAvailable || fuelLogs.length === 0}
+              disabled={fuelLogs.length === 0}
               className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 disabled:opacity-50 text-white font-bold text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors active:scale-[0.98]"
             >
               <Download className="h-3.5 w-3.5" />
@@ -599,12 +646,6 @@ export function ExpensesPage() {
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">Loading...</td>
                   </tr>
-                ) : !fuelLogsAvailable ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-semibold italic">
-                      Refueling history unavailable (GET /api/fuel returned 404).
-                    </td>
-                  </tr>
                 ) : fuelLogs.length > 0 ? (
                   fuelLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-white/[0.02]">
@@ -616,7 +657,9 @@ export function ExpensesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">No fuel records.</td>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-semibold italic">
+                      No refueling history logs found.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -630,7 +673,7 @@ export function ExpensesPage() {
             <h3 className="text-xs font-bold text-white tracking-wide uppercase">Operational Expenses</h3>
             <button
               onClick={() => exportCSV('expenses')}
-              disabled={!expensesAvailable || otherExpenses.length === 0}
+              disabled={otherExpenses.length === 0}
               className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 disabled:opacity-50 text-white font-bold text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors active:scale-[0.98]"
             >
               <Download className="h-3.5 w-3.5" />
@@ -652,12 +695,6 @@ export function ExpensesPage() {
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">Loading...</td>
                   </tr>
-                ) : !expensesAvailable ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-semibold italic">
-                      Operational expenses history unavailable (GET /api/expenses returned 404).
-                    </td>
-                  </tr>
                 ) : otherExpenses.length > 0 ? (
                   otherExpenses.map((exp) => (
                     <tr key={exp.id} className="hover:bg-white/[0.02]">
@@ -669,7 +706,9 @@ export function ExpensesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">No expense records.</td>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-semibold italic">
+                      No operational expenses logs found.
+                    </td>
                   </tr>
                 )}
               </tbody>

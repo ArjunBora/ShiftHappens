@@ -201,6 +201,9 @@ export function TripsPage() {
       return;
     }
 
+    const matchedTrip = trips.find(t => t.id === activeCompleteTripId);
+    if (!matchedTrip) return;
+
     try {
       const payload = {
         actualDistance: Number(actualDistance),
@@ -212,6 +215,37 @@ export function TripsPage() {
 
       await completeTrip(activeCompleteTripId, payload);
       showToast('Trip marked Completed successfully!', 'success');
+      
+      // Save created Fuel Log to localStorage so it is available in Expenses Page tables
+      if (Number(fuelLiters) > 0 || Number(fuelCost) > 0) {
+        const localFuelLogsString = localStorage.getItem('local_fuel_logs');
+        const localFuelLogs = localFuelLogsString ? JSON.parse(localFuelLogsString) : [];
+        const newFuelLog = {
+          id: Date.now() + Math.random(),
+          vehicle_reg: matchedTrip.vehicle_reg,
+          date: new Date().toLocaleDateString('en-GB'),
+          liters: Number(fuelLiters) || 0,
+          cost: Number(fuelCost) || 0
+        };
+        localFuelLogs.push(newFuelLog);
+        localStorage.setItem('local_fuel_logs', JSON.stringify(localFuelLogs));
+      }
+
+      // Save created Expense to localStorage
+      if (Number(tollCost) > 0 || Number(otherCost) > 0) {
+        const localExpensesString = localStorage.getItem('local_expenses_logs');
+        const localExpenses = localExpensesString ? JSON.parse(localExpensesString) : [];
+        const newExpense = {
+          id: Date.now() + Math.random(),
+          trip_id: `TR-${activeCompleteTripId}`,
+          vehicle_reg: matchedTrip.vehicle_reg,
+          toll: Number(tollCost) || 0,
+          other: Number(otherCost) || 0
+        };
+        localExpenses.push(newExpense);
+        localStorage.setItem('local_expenses_logs', JSON.stringify(localExpenses));
+      }
+
       setCompleteModalOpen(false);
       
       // Reset inputs
@@ -254,8 +288,8 @@ export function TripsPage() {
   };
 
   // Find odometer stats for the active completion modal
-  const matchedTrip = trips.find(t => t.id === activeCompleteTripId);
-  const matchedVehicle = matchedTrip ? vehicles.find(v => v.reg_number === matchedTrip.vehicle_reg) : null;
+  const matchedTripObj = trips.find(t => t.id === activeCompleteTripId);
+  const matchedVehicle = matchedTripObj ? vehicles.find(v => v.reg_number === matchedTripObj.vehicle_reg) : null;
   const currentOdo = matchedVehicle ? matchedVehicle.odometer : 0;
   const nextOdo = currentOdo + (Number(actualDistance) || 0);
 
