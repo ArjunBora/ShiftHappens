@@ -7,8 +7,14 @@ This project implements a backend service for the TransitOps specification using
 ```bash
 npm install
 npx prisma db push
+node seed.js
 npm start
 ```
+
+## Demo assets
+
+- Seed data script: seed.js
+- Postman collection: TransitOps_API.postman_collection.json
 
 ## Core endpoints
 

@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "TransitOps API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Create Vehicle",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "x-simulated-role", "value": "Fleet Manager" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"regNumber\": \"GJ02CD1234\",\n  \"model\": \"TRUCK-11\",\n  \"type\": \"Truck\",\n  \"maxLoadCapacity\": 800,\n  \"odometer\": 500,\n  \"acquisitionCost\": 1200000,\n  \"status\": \"Available\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/vehicles"
+      }
+    },
+    {
+      "name": "Create Driver",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "x-simulated-role", "value": "Safety Officer" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Asha Patel\",\n  \"licenseNumber\": \"DL654321\",\n  \"licenseCategory\": \"HMV\",\n  \"licenseExpiry\": \"2030-01-01\",\n  \"contactNumber\": \"9876543210\",\n  \"tripCompletionRate\": 95,\n  \"status\": \"Available\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/drivers"
+      }
+    },
+    {
+      "name": "Create Trip",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "x-simulated-role", "value": "Dispatcher" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"Mumbai\",\n  \"destination\": \"Pune\",\n  \"cargoWeight\": 400,\n  \"plannedDistance\": 180,\n  \"vehicleReg\": \"GJ01AB4527\",\n  \"driverId\": 1,\n  \"status\": \"Draft\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/trips"
+      }
+    },
+    {
+      "name": "Dispatch Trip",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/trips/1/dispatch"
+      }
+    },
+    {
+      "name": "Complete Trip",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"actualDistance\": 180,\n  \"fuelLiters\": 12,\n  \"fuelCost\": 1100,\n  \"tollCost\": 200,\n  \"otherCost\": 100\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/trips/1/complete"
+      }
+    },
+    {
+      "name": "Analytics Summary",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/analytics/summary"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    }
+  ]
+}
